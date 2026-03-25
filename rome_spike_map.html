@@ -511,13 +511,31 @@ async function init() {
 
   // ── Layer toggle (Sezioni / Municipi) ────────────────────────────────────
   setMode = function(mode) {
+    const viewToggle = document.getElementById("view-toggle");
+    const legendLbl  = document.querySelector("#legend .llbl");
+    const legendEnds = document.querySelectorAll("#legend .lends span");
+
     if (mode === "sections") {
       currentDataset  = "sections";
       ACTIVE_FEATURES = sectionsGeoJSON.features;
+      viewToggle.style.display = "";
+      legendLbl.textContent    = "Residents per km²";
+      legendEnds[0].textContent = "sparse";
+      legendEnds[1].textContent = "dense";
     } else {
       if (!municipiGeoJSON) return;
       currentDataset  = "municipi";
       ACTIVE_FEATURES = municipiGeoJSON.features;
+      // Collapse to flat if currently in 3D
+      if (is3D) {
+        is3D = false;
+        document.getElementById("btn-3d").classList.remove("active");
+        document.getElementById("btn-flat").classList.add("active");
+      }
+      viewToggle.style.display  = "none";
+      legendLbl.textContent     = "Population";
+      legendEnds[0].textContent = "fewer";
+      legendEnds[1].textContent = "more";
     }
     currentMainLayer = currentDataset === "sections" ? makeSectionsLayer() : makeMunicipiLayer();
     deckgl.setProps({ layers: getLayers() });
@@ -546,7 +564,17 @@ async function init() {
     is3D = false;
     highlightedFeature = null;
     pinData = [];
-    currentMainLayer = currentDataset === "sections" ? makeSectionsLayer() : makeMunicipiLayer();
+    // Always return to sections view
+    currentDataset  = "sections";
+    ACTIVE_FEATURES = sectionsGeoJSON.features;
+    currentMainLayer = makeSectionsLayer();
+    document.getElementById("view-toggle").style.display = "";
+    document.querySelector("#legend .llbl").textContent = "Residents per km²";
+    const legendEnds = document.querySelectorAll("#legend .lends span");
+    legendEnds[0].textContent = "sparse";
+    legendEnds[1].textContent = "dense";
+    document.getElementById("btn-sections").classList.add("active");
+    document.getElementById("btn-municipi").classList.remove("active");
     deckgl.setProps({
       layers: getLayers(),
       initialViewState: {
