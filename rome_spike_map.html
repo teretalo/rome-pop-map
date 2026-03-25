@@ -1,0 +1,591 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Roma · Population Density</title>
+
+<link  href="https://cdn.jsdelivr.net/npm/maplibre-gl@4.5.2/dist/maplibre-gl.css" rel="stylesheet" />
+<script src="https://cdn.jsdelivr.net/npm/maplibre-gl@4.5.2/dist/maplibre-gl.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/deck.gl@9.0.27/dist.min.js"></script>
+
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { background: #f4ece0; font-family: "Georgia", serif; overflow: hidden; }
+  #map { width: 100vw; height: 100vh; }
+
+  .maplibregl-ctrl-attrib {
+    background: rgba(244,236,224,.8) !important;
+    font-size: .56rem !important; color: #b8a898 !important;
+  }
+  .maplibregl-ctrl-attrib-button { display: none !important; }
+
+  /* ── Title ───────────────────────────────────────────────── */
+  #title {
+    position: absolute; top: 26px; left: 30px;
+    pointer-events: none; z-index: 10;
+  }
+  #title h1 { font-size: 2rem; font-weight: normal; letter-spacing: .13em; color: #5c1f2e; }
+  #title p  { margin-top: 3px; font-size: .72rem; letter-spacing: .2em; text-transform: uppercase; color: #a08878; }
+
+  /* ── Toggles ─────────────────────────────────────────────── */
+  #layer-toggle, #view-toggle {
+    position: absolute; left: 30px;
+    z-index: 10; display: flex; gap: 4px;
+  }
+  #layer-toggle { top: 90px; }
+  #view-toggle  { top: 126px; }
+  .toggle-btn {
+    padding: 5px 13px;
+    font-family: "Georgia", serif; font-size: .72rem;
+    letter-spacing: .12em; text-transform: uppercase;
+    background: rgba(244,236,224,.88);
+    border: 1px solid rgba(140,80,70,.28);
+    border-radius: 6px; color: #7a4030;
+    cursor: pointer; transition: all .15s;
+  }
+  .toggle-btn:hover:not(:disabled) { background: rgba(244,236,224,.98); border-color: rgba(140,80,70,.5); }
+  .toggle-btn.active { background: #bc3050; color: #fff; border-color: #bc3050; }
+  .toggle-btn:disabled { opacity: .4; cursor: default; }
+
+  /* ── Search ──────────────────────────────────────────────── */
+  #search-wrap {
+    position: absolute; top: 26px; right: 30px; z-index: 20;
+    display: flex; border-radius: 9px; overflow: hidden;
+    box-shadow: 0 2px 14px rgba(80,30,20,.10);
+  }
+  #search-input {
+    width: 230px; padding: 9px 14px;
+    font-family: "Georgia", serif; font-size: .82rem;
+    background: rgba(244,236,224,.97);
+    border: 1px solid rgba(140,80,70,.22); border-right: none;
+    border-radius: 9px 0 0 9px; color: #4a3020; outline: none;
+  }
+  #search-input::placeholder { color: #c8b0a0; }
+  #search-input:focus { border-color: rgba(188,48,80,.4); }
+  #search-btn {
+    padding: 9px 14px; background: #bc3050; color: #fff;
+    border: none; cursor: pointer; font-size: .9rem;
+    border-radius: 0 9px 9px 0; transition: background .15s;
+  }
+  #search-btn:hover { background: #9a2040; }
+
+  /* ── Result card ─────────────────────────────────────────── */
+  #result-card {
+    position: absolute; top: 72px; right: 30px; z-index: 20;
+    max-width: 270px; display: none;
+    background: rgba(244,236,224,.97);
+    border: 1px solid rgba(140,80,70,.22);
+    border-radius: 10px; padding: 12px 16px;
+    font-size: .8rem; line-height: 1.8; color: #4a3020;
+    box-shadow: 0 4px 20px rgba(80,30,20,.10);
+  }
+  #result-card .raddr { color: #5c1f2e; font-size: .9rem; margin-bottom: 3px; }
+  #result-card .rdens { color: #a52674; font-size: 1.05rem; font-weight: bold; }
+  #result-card .rcomp { color: #a08878; font-size: .72rem; }
+  #result-card .rclose {
+    float: right; font-size: .72rem; color: #c8b0a0;
+    cursor: pointer; pointer-events: all; margin-left: 8px;
+  }
+  #result-card .rclose:hover { color: #7a1f2e; }
+  .spin {
+    display: inline-block; width: 12px; height: 12px;
+    border: 1.5px solid rgba(140,50,40,.15); border-top-color: #bc3050;
+    border-radius: 50%; animation: spin .7s linear infinite;
+    vertical-align: middle; margin-left: 5px;
+  }
+
+  /* ── Hover tooltip ───────────────────────────────────────── */
+  #tooltip {
+    position: absolute; pointer-events: none; z-index: 20;
+    background: rgba(244,236,224,.95);
+    border: 1px solid rgba(140,80,70,.22);
+    border-radius: 9px; padding: 8px 13px;
+    font-size: .8rem; line-height: 1.7; color: #4a3020;
+    display: none; white-space: nowrap;
+    box-shadow: 0 3px 14px rgba(80,30,20,.08);
+  }
+  #tooltip .tarea { color: #7a1f2e; font-size: .85rem; }
+  #tooltip .tval  { color: #a52674; font-weight: bold; }
+  #tooltip .tsub  { color: #a08878; font-size: .68rem; }
+
+  /* ── Legend ──────────────────────────────────────────────── */
+  #legend {
+    position: absolute; bottom: 34px; left: 30px;
+    z-index: 10; pointer-events: none;
+  }
+  #legend .llbl { font-size: .67rem; letter-spacing: .15em; text-transform: uppercase; color: #a08878; margin-bottom: 7px; }
+  #legend .lbar { width: 130px; height: 7px; border-radius: 4px; margin-bottom: 5px;
+    background: linear-gradient(to right, rgba(253,228,140,.9), #f4a350, #d55e58, #a52674, #560b6b, #0e0430); }
+  #legend .lends { display: flex; justify-content: space-between; font-size: .61rem; color: #b89888; }
+
+  /* ── Hint ────────────────────────────────────────────────── */
+  #hint {
+    position: absolute; bottom: 34px; right: 34px;
+    z-index: 10; pointer-events: none; text-align: right;
+    font-size: .63rem; letter-spacing: .1em; text-transform: uppercase;
+    color: #c8b8a8; line-height: 2;
+  }
+
+  /* ── Loading ─────────────────────────────────────────────── */
+  #loading {
+    position: absolute; inset: 0; background: #f4ece0;
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    z-index: 100; transition: opacity .5s ease;
+  }
+  #loading h2 { font-size: 1.3rem; font-weight: normal; letter-spacing: .22em; color: #7a1f2e; margin-bottom: 20px; }
+  #loading .lspinner { width: 32px; height: 32px; border: 2px solid rgba(140,50,40,.12); border-top-color: #bc3050; border-radius: 50%; animation: spin .85s linear infinite; }
+  #loading .lstatus  { margin-top: 14px; font-size: .68rem; letter-spacing: .17em; text-transform: uppercase; color: #b09080; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+</style>
+</head>
+<body>
+
+<div id="loading">
+  <h2>Roma</h2>
+  <div class="lspinner"></div>
+  <div class="lstatus" id="load-status">Loading…</div>
+</div>
+
+<div id="map"></div>
+
+<div id="title">
+  <h1>Roma</h1>
+  <p>Population density · ISTAT 2021</p>
+</div>
+
+<div id="layer-toggle">
+  <button id="btn-sections" class="toggle-btn active" onclick="setMode('sections')">Sezioni</button>
+  <button id="btn-municipi" class="toggle-btn" onclick="setMode('municipi')">Municipi</button>
+</div>
+<div id="view-toggle">
+  <button id="btn-3d"   class="toggle-btn"        onclick="setView('3d')">Spikes</button>
+  <button id="btn-flat" class="toggle-btn active" onclick="setView('flat')">Choropleth</button>
+  <button class="toggle-btn" style="margin-left:4px" onclick="resetView()" title="Reset to overview">⌂</button>
+</div>
+
+<div id="search-wrap">
+  <input id="search-input" type="text" placeholder="Search an address in Rome…" autocomplete="off" />
+  <button id="search-btn">→</button>
+</div>
+<div id="result-card"></div>
+
+<div id="tooltip"></div>
+
+<div id="legend">
+  <div class="llbl">Residents per km²</div>
+  <div class="lbar"></div>
+  <div class="lends"><span>sparse</span><span>dense</span></div>
+</div>
+
+<div id="hint">
+  Drag · scroll to zoom<br>
+  Spikes · Choropleth to switch<br>
+  Click for address
+</div>
+
+<script>
+// ── Colour scale ──────────────────────────────────────────────────────────────
+// Inverted Magma: pale gold → amber → coral → fuchsia → purple → near-black
+// Dark = dense. No green, no grey; all stops read clearly against parchment.
+const PALETTE = [
+  [253, 228, 140, 210],
+  [244, 163,  80, 235],
+  [213,  94,  88, 250],
+  [165,  38, 116, 255],
+  [ 86,  11, 107, 255],
+  [ 14,   4,  48, 255],
+];
+// Gamma < 1 compresses the high end and spreads the low end,
+// where most sections live on the density distribution.
+const COLOUR_GAMMA = 0.4;
+function lerp(a, b, t) { return a.map((v,i) => Math.round(v + (b[i]-v)*t)); }
+function hexColor(t) {
+  const tg = Math.pow(Math.min(Math.max(t, 0), 1), COLOUR_GAMMA);
+  const n = PALETTE.length - 1, s = tg * n;
+  const lo = Math.floor(s), hi = Math.min(lo+1, n);
+  return lerp(PALETTE[lo], PALETTE[hi], s - lo);
+}
+
+// ── Named zones ───────────────────────────────────────────────────────────────
+const ZONES = [
+  { name: "Colosseo & Fori",  lon: 12.4922, lat: 41.8902, r: 0.009 },
+  { name: "Pantheon",         lon: 12.4769, lat: 41.8986, r: 0.005 },
+  { name: "Piazza Navona",    lon: 12.4731, lat: 41.8996, r: 0.006 },
+  { name: "Trastevere",       lon: 12.4660, lat: 41.8847, r: 0.014 },
+  { name: "Testaccio",        lon: 12.4760, lat: 41.8760, r: 0.011 },
+  { name: "Monti",            lon: 12.4930, lat: 41.8950, r: 0.009 },
+  { name: "Vaticano",         lon: 12.4534, lat: 41.9022, r: 0.012 },
+  { name: "Prati",            lon: 12.4620, lat: 41.9080, r: 0.013 },
+  { name: "Parioli",          lon: 12.5010, lat: 41.9270, r: 0.017 },
+  { name: "Termini",          lon: 12.5020, lat: 41.9006, r: 0.010 },
+  { name: "Esquilino",        lon: 12.5100, lat: 41.8960, r: 0.012 },
+  { name: "San Lorenzo",      lon: 12.5180, lat: 41.9010, r: 0.010 },
+  { name: "Pigneto",          lon: 12.5380, lat: 41.8850, r: 0.013 },
+  { name: "EUR",              lon: 12.4622, lat: 41.8320, r: 0.020 },
+  { name: "Ostiense",         lon: 12.4820, lat: 41.8670, r: 0.013 },
+  { name: "Garbatella",       lon: 12.4850, lat: 41.8580, r: 0.011 },
+  { name: "Tiburtino",        lon: 12.5460, lat: 41.9090, r: 0.013 },
+  { name: "Prenestino",       lon: 12.5290, lat: 41.8800, r: 0.013 },
+  { name: "Flaminio",         lon: 12.4761, lat: 41.9270, r: 0.013 },
+  { name: "Trieste",          lon: 12.5240, lat: 41.9220, r: 0.014 },
+  { name: "Nomentano",        lon: 12.5280, lat: 41.9180, r: 0.015 },
+  { name: "Centocelle",       lon: 12.5600, lat: 41.8780, r: 0.016 },
+  { name: "Appio Latino",     lon: 12.5200, lat: 41.8660, r: 0.016 },
+  { name: "Portuense",        lon: 12.4400, lat: 41.8580, r: 0.016 },
+  { name: "Primavalle",       lon: 12.4180, lat: 41.9270, r: 0.014 },
+  { name: "Tuscolano",        lon: 12.5500, lat: 41.8600, r: 0.015 },
+  { name: "Campo de' Fiori",  lon: 12.4722, lat: 41.8957, r: 0.005 },
+];
+
+function zoneAt(lon, lat) {
+  let best = null, bestD = Infinity;
+  for (const z of ZONES) {
+    const d = Math.hypot(z.lon-lon, z.lat-lat);
+    if (d < (z.r??0.01) && d < bestD) { bestD=d; best=z.name; }
+  }
+  if (best) return best;
+  for (const z of ZONES) {
+    const d = Math.hypot(z.lon-lon, z.lat-lat);
+    if (d < bestD) { bestD=d; best=z.name; }
+  }
+  return best ?? "Roma";
+}
+
+// ── Rome average density ──────────────────────────────────────────────────────
+const ROME_AVG = 2_232;
+
+function densityComparison(d) {
+  if (!d || d < 10) return `<span class="rcomp">no population data here</span>`;
+  const r = d / ROME_AVG;
+  let label;
+  if      (r > 10) label = `${r.toFixed(1)}× city avg — extremely dense`;
+  else if (r >  4) label = `${r.toFixed(1)}× city avg — very dense`;
+  else if (r >  2) label = `${r.toFixed(1)}× city avg — dense`;
+  else if (r >  1) label = `${r.toFixed(1)}× city avg`;
+  else if (r > .5) label = `${r.toFixed(2)}× city avg — sparse`;
+  else             label = `${r.toFixed(2)}× city avg — very sparse`;
+  return `<span class="rcomp">${label}</span>`;
+}
+
+// ── Point-in-polygon density lookup ───────────────────────────────────────────
+let ACTIVE_FEATURES = [];
+
+function pointInPolygon(lon, lat, ring) {
+  let inside = false;
+  for (let i = 0, j = ring.length - 1; i < ring.length; j = i++) {
+    const xi = ring[i][0], yi = ring[i][1];
+    const xj = ring[j][0], yj = ring[j][1];
+    if (((yi > lat) !== (yj > lat)) &&
+        (lon < (xj - xi) * (lat - yi) / (yj - yi) + xi))
+      inside = !inside;
+  }
+  return inside;
+}
+
+function statsAt(lon, lat) {
+  for (const f of ACTIVE_FEATURES) {
+    const geo = f.geometry;
+    if (!geo) continue;
+    const hit = geo.type === "Polygon"
+      ? pointInPolygon(lon, lat, geo.coordinates[0])
+      : geo.type === "MultiPolygon"
+        ? geo.coordinates.some(p => pointInPolygon(lon, lat, p[0]))
+        : false;
+    if (hit) return {
+      density:    f.properties.density    ?? 0,
+      population: f.properties.population ?? 0,
+    };
+  }
+  return { density: 0, population: 0 };
+}
+
+// ── Geocoding ─────────────────────────────────────────────────────────────────
+const gcCache = {};
+async function reverseGeocode(lon, lat) {
+  const key = `${lon.toFixed(3)},${lat.toFixed(3)}`;
+  if (gcCache[key]) return gcCache[key];
+  try {
+    const r = await fetch(
+      `https://nominatim.openstreetmap.org/reverse?lat=${lat}&lon=${lon}&format=json&accept-language=it&zoom=17`,
+      { headers: {"User-Agent":"RomePopMap/1.0"} });
+    const d = await r.json(), a = d.address ?? {};
+    const res = {
+      street: a.road || a.pedestrian || a.path || a.suburb || "",
+      area:   a.suburb || a.neighbourhood || a.city_district || "",
+    };
+    return gcCache[key] = res;
+  } catch { return {street:"", area:""}; }
+}
+
+async function forwardGeocode(q) {
+  try {
+    const r = await fetch(
+      `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(q+", Roma")}&format=json&limit=1&countrycodes=it&accept-language=it`,
+      { headers: {"User-Agent":"RomePopMap/1.0"} });
+    const d = await r.json();
+    if (!d.length) return null;
+    return { lon: parseFloat(d[0].lon), lat: parseFloat(d[0].lat), name: d[0].display_name.split(",")[0] };
+  } catch { return null; }
+}
+
+// ── Main ──────────────────────────────────────────────────────────────────────
+let setMode, setView, resetView; // exposed to buttons
+
+async function init() {
+  const statusEl  = document.getElementById("load-status");
+  const tooltipEl = document.getElementById("tooltip");
+  const cardEl    = document.getElementById("result-card");
+
+  // Load all data in parallel
+  statusEl.textContent = "Loading map data…";
+  const [sectionsGeoJSON, municipiGeoJSON, tiberGeoJSON] = await Promise.all([
+    fetch("rome_sections.geojson").then(r => r.json()),
+    fetch("rome_municipi.geojson").then(r => r.json()).catch(() => null),
+    fetch("rome_tiber.geojson").then(r => r.json()).catch(() => null),
+  ]);
+
+  ACTIVE_FEATURES = sectionsGeoJSON.features;
+
+  // Disable municipi button if data unavailable
+  if (!municipiGeoJSON) {
+    const btn = document.getElementById("btn-municipi");
+    btn.disabled = true;
+    btn.title = "Run fetch_data.py to generate municipality data";
+  }
+
+  // Max values for colour scaling
+  const maxDensity = {
+    sections: Math.max(...sectionsGeoJSON.features.map(f => f.properties.density)),
+    municipi:  municipiGeoJSON ? Math.max(...municipiGeoJSON.features.map(f => f.properties.density)) : 1,
+  };
+  const maxMunicipiPop = municipiGeoJSON
+    ? Math.max(...municipiGeoJSON.features.map(f => f.properties.population ?? 0))
+    : 1;
+
+  let currentDataset = "sections";
+  let is3D = false;
+  let viewState = { longitude: 12.492, latitude: 41.894, zoom: 11.5, pitch: 0, bearing: 0 };
+
+  const TARGET_HEIGHT_M = 18000;
+
+  function colorFor(f, dataset) {
+    return hexColor(Math.min((f.properties.density ?? 0) / maxDensity[dataset], 1));
+  }
+  function elevationFor(f, dataset) {
+    return ((f.properties.density ?? 0) / maxDensity[dataset]) * TARGET_HEIGHT_M;
+  }
+
+  // ── Layer factories ───────────────────────────────────────────────────────
+  function makeSectionsLayer() {
+    return new deck.GeoJsonLayer({
+      id: "sections",
+      data: sectionsGeoJSON,
+      filled: true, stroked: false,
+      extruded: is3D, wireframe: false,
+      pickable: true, autoHighlight: true,
+      highlightColor: [255, 255, 255, 40],
+      getFillColor: f => colorFor(f, "sections"),
+      getElevation: f => elevationFor(f, "sections"),
+      opacity: is3D ? 0.9 : 0.78,
+    });
+  }
+
+  function makeMunicipiLayer() {
+    return new deck.GeoJsonLayer({
+      id: "municipi",
+      data: municipiGeoJSON || { type: "FeatureCollection", features: [] },
+      filled: true, stroked: true, extruded: false,
+      pickable: true, autoHighlight: true,
+      highlightColor: [255, 255, 255, 55],
+      getFillColor: f => hexColor(Math.min((f.properties.population ?? 0) / maxMunicipiPop, 1)),
+      getLineColor: [255, 255, 255, 130],
+      getLineWidth: 2, lineWidthMinPixels: 1,
+      opacity: 0.65,
+    });
+  }
+
+  const tiberLayer = tiberGeoJSON ? new deck.GeoJsonLayer({
+    id: "tiber",
+    data: tiberGeoJSON,
+    stroked: true, filled: false, pickable: false,
+    getLineColor: [30, 120, 200, 220],
+    getLineWidth: 18, lineWidthMinPixels: 3,
+  }) : null;
+
+  // ── Search-result pin ─────────────────────────────────────────────────────
+  let pinData = [];
+  let currentMainLayer = makeSectionsLayer();
+
+  function makePinLayer(data) {
+    return new deck.ScatterplotLayer({
+      id: "pin", data,
+      getPosition: d => [d.lon, d.lat],
+      getRadius: 160,
+      getFillColor: [188, 48, 80, 240],
+      getLineColor: [255, 255, 255, 220],
+      lineWidthMinPixels: 2,
+      stroked: true, pickable: false,
+    });
+  }
+
+  function getLayers() {
+    return [
+      currentMainLayer,
+      ...(tiberLayer ? [tiberLayer] : []),
+      makePinLayer(pinData),
+    ];
+  }
+
+  // ── Deck ──────────────────────────────────────────────────────────────────
+  const deckgl = new deck.DeckGL({
+    container: "map",
+    mapStyle: "https://basemaps.cartocdn.com/gl/voyager-gl-style/style.json",
+    initialViewState: viewState,
+    controller: { scrollZoom: { smooth: true, speed: 0.02 }, inertia: 200 },
+    layers: getLayers(),
+    onViewStateChange: ({ viewState: vs }) => { viewState = vs; },
+
+    onHover: ({ object, x, y }) => {
+      if (!object) { tooltipEl.style.display = "none"; return; }
+      const d = object.properties?.density ?? 0;
+
+      // Zone/municipio name
+      let zone;
+      if (object.properties?.name) {
+        zone = object.properties.name;
+      } else {
+        const geo = object.geometry;
+        let ring;
+        if (geo?.type === "Polygon") ring = geo.coordinates[0];
+        else if (geo?.type === "MultiPolygon") ring = geo.coordinates[0]?.[0];
+        const cx = ring ? ring.reduce((s,p)=>s+p[0],0)/ring.length : 0;
+        const cy = ring ? ring.reduce((s,p)=>s+p[1],0)/ring.length : 0;
+        zone = zoneAt(cx, cy);
+      }
+
+      const pop  = object.properties?.population ?? 0;
+      const dens = object.properties?.density    ?? 0;
+      tooltipEl.innerHTML =
+        `<span class="tarea">${zone}</span><br>` +
+        `<span class="tval">${pop.toLocaleString()}</span><span class="tsub"> residents</span><br>` +
+        `<span class="tsub">${dens.toLocaleString()} res/km²</span>`;
+      tooltipEl.style.display = "block";
+      const pad=14, tw=tooltipEl.offsetWidth, th=tooltipEl.offsetHeight;
+      tooltipEl.style.left = (x+pad+tw>innerWidth  ? x-tw-pad : x+pad)+"px";
+      tooltipEl.style.top  = (y+pad+th>innerHeight ? y-th-pad : y+pad)+"px";
+    },
+
+    onClick: ({ object, coordinate }) => {
+      if (!coordinate) return;
+      const stats = object?.properties
+        ? { density: object.properties.density ?? 0, population: object.properties.population ?? 0 }
+        : statsAt(...coordinate);
+      showCard(coordinate[0], coordinate[1], stats);
+    },
+  });
+
+  // ── Layer toggle (Sezioni / Municipi) ────────────────────────────────────
+  setMode = function(mode) {
+    if (mode === "sections") {
+      currentDataset  = "sections";
+      ACTIVE_FEATURES = sectionsGeoJSON.features;
+    } else {
+      if (!municipiGeoJSON) return;
+      currentDataset  = "municipi";
+      ACTIVE_FEATURES = municipiGeoJSON.features;
+    }
+    currentMainLayer = currentDataset === "sections" ? makeSectionsLayer() : makeMunicipiLayer();
+    deckgl.setProps({ layers: getLayers() });
+    document.getElementById("btn-sections").classList.toggle("active", mode === "sections");
+    document.getElementById("btn-municipi").classList.toggle("active", mode !== "sections");
+  };
+
+  // ── View toggle (3D / Flat) + Reset ──────────────────────────────────────
+  setView = function(mode) {
+    is3D = mode === "3d";
+    currentMainLayer = currentDataset === "sections" ? makeSectionsLayer() : makeMunicipiLayer();
+    deckgl.setProps({
+      layers: getLayers(),
+      initialViewState: {
+        ...viewState,
+        pitch:   is3D ? 50 : 0,
+        bearing: is3D ? (viewState.bearing || -15) : 0,
+        transitionDuration: 500,
+      },
+    });
+    document.getElementById("btn-3d").classList.toggle("active",   is3D);
+    document.getElementById("btn-flat").classList.toggle("active", !is3D);
+  };
+
+  resetView = function() {
+    is3D = false;
+    currentMainLayer = currentDataset === "sections" ? makeSectionsLayer() : makeMunicipiLayer();
+    deckgl.setProps({
+      layers: getLayers(),
+      initialViewState: {
+        longitude: 12.492, latitude: 41.894, zoom: 11.5,
+        pitch: 0, bearing: 0, transitionDuration: 700,
+      },
+    });
+    document.getElementById("btn-flat").classList.add("active");
+    document.getElementById("btn-3d").classList.remove("active");
+  };
+
+  // ── Result card ───────────────────────────────────────────────────────────
+  async function showCard(lon, lat, stats, knownName) {
+    const { density, population } = stats;
+    cardEl.innerHTML =
+      `<span class="rclose" onclick="this.parentElement.style.display='none'">✕</span>` +
+      `<div class="raddr">${knownName || "…"}<span class="spin" id="rsp"></span></div>` +
+      `<span class="rdens">${population > 0 ? population.toLocaleString() : "—"}</span>` +
+      `<span class="rcomp"> residents</span>` +
+      (density > 0 ? `&ensp;<span class="rcomp">${density.toLocaleString()} res/km²</span>` : "") +
+      `<br>` + densityComparison(density);
+    cardEl.style.display = "block";
+
+    const { street, area } = await reverseGeocode(lon, lat);
+    const addrEl = cardEl.querySelector(".raddr");
+    if (addrEl) addrEl.innerHTML = [street, area].filter(Boolean).join(", ") || "Roma";
+  }
+
+  // ── Search ────────────────────────────────────────────────────────────────
+  async function search() {
+    const q = document.getElementById("search-input").value.trim();
+    if (!q) return;
+    cardEl.innerHTML = `<span class="spin"></span> searching…`;
+    cardEl.style.display = "block";
+
+    const geo = await forwardGeocode(q);
+    if (!geo) {
+      cardEl.innerHTML = `<span style="color:#a08878">Address not found.</span>`;
+      return;
+    }
+    pinData = [geo];
+    is3D = false;
+    document.getElementById("btn-3d").classList.remove("active");
+    document.getElementById("btn-flat").classList.add("active");
+    deckgl.setProps({
+      layers: getLayers(),
+      initialViewState: {
+        longitude: geo.lon, latitude: geo.lat,
+        zoom: 14, pitch: 0, bearing: 0, transitionDuration: 800,
+      },
+    });
+    const stats = statsAt(geo.lon, geo.lat);
+    showCard(geo.lon, geo.lat, stats, geo.name);
+  }
+
+  document.getElementById("search-btn").onclick = search;
+  document.getElementById("search-input").onkeydown = e => { if (e.key==="Enter") search(); };
+
+  // Fade loading
+  const loadEl = document.getElementById("loading");
+  loadEl.style.opacity = "0";
+  setTimeout(() => loadEl.style.display = "none", 500);
+}
+
+init();
+</script>
+</body>
+</html>

@@ -1,0 +1,11 @@
+# Heavy source data — reproducible by running fetch_data.py
+kontur_population_IT.gpkg
+kontur_population_IT.gpkg.gz
+R12_21.zip
+
+# Unused/legacy files
+rome_heightmap.png
+rome_texture.png
+rome_population.json
+rome_hexagons.geojson
+rome_quartieri.geojson
