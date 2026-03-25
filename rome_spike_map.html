@@ -501,9 +501,15 @@ async function init() {
     container: "map",
     mapStyle: "https://basemaps.cartocdn.com/gl/voyager-gl-style/style.json",
     initialViewState: viewState,
-    controller: { scrollZoom: { smooth: true, speed: 0.02 }, inertia: 200 },
+    controller: { scrollZoom: { smooth: true, speed: 0.02 }, inertia: 0, doubleClickZoom: false },
     layers: getLayers(),
-    onViewStateChange: ({ viewState: vs }) => { viewState = vs; },
+    onViewStateChange: ({ viewState: vs, oldViewState }) => {
+      if (oldViewState) {
+        const delta = vs.zoom - oldViewState.zoom;
+        if (Math.abs(delta) > 0.4) vs = { ...vs, zoom: oldViewState.zoom + Math.sign(delta) * 0.4 };
+      }
+      viewState = vs;
+    },
 
     onHover: ({ object, x, y }) => {
       if (!object) { tooltipEl.style.display = "none"; return; }
