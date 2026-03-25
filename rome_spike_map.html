@@ -350,7 +350,12 @@ async function init() {
     fetch("rome_quartieri.geojson").then(r => r.json()).catch(() => null),
   ]);
 
-  const quartieriFeatures = quartieriGeoJSON?.features ?? [];
+  // Sort so actual neighbourhoods come before municipi — ensures specific name wins
+  const quartieriFeatures = (quartieriGeoJSON?.features ?? []).sort((a, b) => {
+    const aM = a.properties.name?.startsWith("Municipio") ? 1 : 0;
+    const bM = b.properties.name?.startsWith("Municipio") ? 1 : 0;
+    return aM - bM;
+  });
   function quarterAt(lon, lat) {
     for (const f of quartieriFeatures) {
       const geo = f.geometry;
