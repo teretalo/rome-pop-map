@@ -557,7 +557,18 @@ async function init() {
         `<span class="tsub">${dens.toLocaleString()} res/km²</span>`;
       tooltipEl.style.display = "block";
       positionTooltip(x, y);
-      const { street, area } = await reverseGeocode(coordinate[0], coordinate[1]);
+      // Use section centroid for geocoding so repeated clicks on the same section
+      // always return the same street name (also benefits from cache hits)
+      let gcLon = coordinate[0], gcLat = coordinate[1];
+      if (object?.geometry) {
+        const geo = object.geometry;
+        const ring = geo.type === "Polygon" ? geo.coordinates[0] : geo.coordinates[0]?.[0];
+        if (ring) {
+          gcLon = ring.reduce((s,p) => s+p[0], 0) / ring.length;
+          gcLat = ring.reduce((s,p) => s+p[1], 0) / ring.length;
+        }
+      }
+      const { street, area } = await reverseGeocode(gcLon, gcLat);
       const label = [street, area].filter(Boolean).join(", ") || zone;
       const areaEl = tooltipEl.querySelector(".tarea");
       if (areaEl) areaEl.innerHTML = label;
