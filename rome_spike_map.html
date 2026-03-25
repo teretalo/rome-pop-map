@@ -298,23 +298,6 @@ function statsAt(lon, lat) {
 }
 
 // ── Geocoding ─────────────────────────────────────────────────────────────────
-const gcCache = {};
-async function reverseGeocode(lon, lat) {
-  const key = `${lon.toFixed(3)},${lat.toFixed(3)}`;
-  if (gcCache[key]) return gcCache[key];
-  try {
-    const r = await fetch(
-      `https://nominatim.openstreetmap.org/reverse?lat=${lat}&lon=${lon}&format=json&accept-language=it&zoom=17`,
-      { headers: {"User-Agent":"RomePopMap/1.0"} });
-    const d = await r.json(), a = d.address ?? {};
-    const res = {
-      street: a.road || a.pedestrian || a.path || a.suburb || "",
-      area:   a.suburb || a.neighbourhood || a.city_district || "",
-    };
-    return gcCache[key] = res;
-  } catch { return {street:"", area:""}; }
-}
-
 async function forwardGeocode(q) {
   try {
     const r = await fetch(
@@ -542,7 +525,7 @@ async function init() {
       positionTooltip(x, y);
     },
 
-    onClick: async ({ object, coordinate, x, y }) => {
+    onClick: ({ object, coordinate, x, y }) => {
       if (!coordinate) return;
       const pop  = object?.properties?.population ?? statsAt(...coordinate).population;
       const dens = object?.properties?.density    ?? statsAt(...coordinate).density;
@@ -552,26 +535,11 @@ async function init() {
       tooltipEl.classList.add("pinned");
       tooltipEl.innerHTML =
         `<span class="tclose">✕</span>` +
-        `<span class="tarea">${zone}<span class="spin" id="tsp"></span></span><br>` +
+        `<span class="tarea">${zone}</span><br>` +
         `<span class="tval">${pop.toLocaleString()}</span><span class="tsub"> residents</span><br>` +
         `<span class="tsub">${dens.toLocaleString()} res/km²</span>`;
       tooltipEl.style.display = "block";
       positionTooltip(x, y);
-      // Use section centroid for geocoding so repeated clicks on the same section
-      // always return the same street name (also benefits from cache hits)
-      let gcLon = coordinate[0], gcLat = coordinate[1];
-      if (object?.geometry) {
-        const geo = object.geometry;
-        const ring = geo.type === "Polygon" ? geo.coordinates[0] : geo.coordinates[0]?.[0];
-        if (ring) {
-          gcLon = ring.reduce((s,p) => s+p[0], 0) / ring.length;
-          gcLat = ring.reduce((s,p) => s+p[1], 0) / ring.length;
-        }
-      }
-      const { street, area } = await reverseGeocode(gcLon, gcLat);
-      const label = [street, area].filter(Boolean).join(", ") || zone;
-      const areaEl = tooltipEl.querySelector(".tarea");
-      if (areaEl) areaEl.innerHTML = label;
     },
   });
 
