@@ -70,24 +70,6 @@
   }
   #search-btn:hover { background: #9a2040; }
 
-  /* ── Result card ─────────────────────────────────────────── */
-  #result-card {
-    position: absolute; top: 72px; right: 30px; z-index: 20;
-    max-width: 270px; display: none;
-    background: rgba(244,236,224,.97);
-    border: 1px solid rgba(140,80,70,.22);
-    border-radius: 10px; padding: 12px 16px;
-    font-size: .8rem; line-height: 1.8; color: #4a3020;
-    box-shadow: 0 4px 20px rgba(80,30,20,.10);
-  }
-  #result-card .raddr { color: #5c1f2e; font-size: .9rem; margin-bottom: 3px; }
-  #result-card .rdens { color: #a52674; font-size: 1.05rem; font-weight: bold; }
-  #result-card .rcomp { color: #a08878; font-size: .72rem; }
-  #result-card .rclose {
-    float: right; font-size: .72rem; color: #c8b0a0;
-    cursor: pointer; pointer-events: all; margin-left: 8px;
-  }
-  #result-card .rclose:hover { color: #7a1f2e; }
   .spin {
     display: inline-block; width: 12px; height: 12px;
     border: 1.5px solid rgba(140,50,40,.15); border-top-color: #bc3050;
@@ -95,19 +77,26 @@
     vertical-align: middle; margin-left: 5px;
   }
 
-  /* ── Hover tooltip ───────────────────────────────────────── */
+  /* ── Tooltip ─────────────────────────────────────────────── */
   #tooltip {
-    position: absolute; pointer-events: none; z-index: 20;
-    background: rgba(244,236,224,.95);
+    position: absolute; z-index: 20;
+    background: rgba(244,236,224,.97);
     border: 1px solid rgba(140,80,70,.22);
     border-radius: 9px; padding: 8px 13px;
     font-size: .8rem; line-height: 1.7; color: #4a3020;
     display: none; white-space: nowrap;
     box-shadow: 0 3px 14px rgba(80,30,20,.08);
+    pointer-events: none;
   }
-  #tooltip .tarea { color: #7a1f2e; font-size: .85rem; }
-  #tooltip .tval  { color: #a52674; font-weight: bold; }
-  #tooltip .tsub  { color: #a08878; font-size: .68rem; }
+  #tooltip.pinned { pointer-events: all; }
+  #tooltip .tarea  { color: #7a1f2e; font-size: .85rem; }
+  #tooltip .tval   { color: #a52674; font-weight: bold; }
+  #tooltip .tsub   { color: #a08878; font-size: .68rem; }
+  #tooltip .tclose {
+    float: right; margin-left: 10px; cursor: pointer;
+    color: #c8b0a0; font-size: .7rem; line-height: 1;
+  }
+  #tooltip .tclose:hover { color: #7a1f2e; }
 
   /* ── Legend ──────────────────────────────────────────────── */
   #legend {
@@ -118,6 +107,7 @@
   #legend .lbar { width: 130px; height: 7px; border-radius: 4px; margin-bottom: 5px;
     background: linear-gradient(to right, rgba(253,228,140,.9), #f4a350, #d55e58, #a52674, #560b6b, #0e0430); }
   #legend .lends { display: flex; justify-content: space-between; font-size: .61rem; color: #b89888; }
+  #legend .lavg  { margin-top: 7px; font-size: .6rem; letter-spacing: .08em; color: #b89888; }
 
   /* ── Hint ────────────────────────────────────────────────── */
   #hint {
@@ -150,8 +140,6 @@
 
     #search-wrap    { top: 140px; left: 14px; right: 14px; width: auto; }
     #search-input   { flex: 1; width: auto; }
-
-    #result-card    { top: 190px; left: 14px; right: 14px; max-width: none; }
 
     #legend         { bottom: 16px; left: 14px; }
     #hint           { display: none; }
@@ -187,14 +175,13 @@
   <input id="search-input" type="text" placeholder="Search an address in Rome…" autocomplete="off" />
   <button id="search-btn">→</button>
 </div>
-<div id="result-card"></div>
-
 <div id="tooltip"></div>
 
 <div id="legend">
   <div class="llbl">Residents per km²</div>
   <div class="lbar"></div>
   <div class="lends"><span>sparse</span><span>dense</span></div>
+  <div class="lavg">Rome avg · 2,232 res/km²</div>
 </div>
 
 <div id="hint">
@@ -271,21 +258,6 @@ function zoneAt(lon, lat) {
   return best ?? "Roma";
 }
 
-// ── Rome average density ──────────────────────────────────────────────────────
-const ROME_AVG = 2_232;
-
-function densityComparison(d) {
-  if (!d || d < 10) return `<span class="rcomp">no population data here</span>`;
-  const r = d / ROME_AVG;
-  let label;
-  if      (r > 10) label = `${r.toFixed(1)}× city avg — extremely dense`;
-  else if (r >  4) label = `${r.toFixed(1)}× city avg — very dense`;
-  else if (r >  2) label = `${r.toFixed(1)}× city avg — dense`;
-  else if (r >  1) label = `${r.toFixed(1)}× city avg`;
-  else if (r > .5) label = `${r.toFixed(2)}× city avg — sparse`;
-  else             label = `${r.toFixed(2)}× city avg — very sparse`;
-  return `<span class="rcomp">${label}</span>`;
-}
 
 // ── Point-in-polygon density lookup ───────────────────────────────────────────
 let ACTIVE_FEATURES = [];
@@ -360,7 +332,15 @@ let setMode, setView, resetView; // exposed to buttons
 async function init() {
   const statusEl  = document.getElementById("load-status");
   const tooltipEl = document.getElementById("tooltip");
-  const cardEl    = document.getElementById("result-card");
+  let tooltipPinned = false;
+
+  tooltipEl.addEventListener("click", e => {
+    if (e.target.classList.contains("tclose")) {
+      tooltipPinned = false;
+      tooltipEl.classList.remove("pinned");
+      tooltipEl.style.display = "none";
+    }
+  });
 
   // Load all data in parallel
   statusEl.textContent = "Loading map data…";
@@ -454,6 +434,25 @@ async function init() {
     getLineWidth: 18, lineWidthMinPixels: 3,
   }) : null;
 
+  // ── Tooltip helpers ───────────────────────────────────────────────────────
+  function zoneLabel(object) {
+    if (!object) return "Roma";
+    if (object.properties?.name) return object.properties.name;
+    const geo = object.geometry;
+    let ring;
+    if (geo?.type === "Polygon") ring = geo.coordinates[0];
+    else if (geo?.type === "MultiPolygon") ring = geo.coordinates[0]?.[0];
+    const cx = ring ? ring.reduce((s,p)=>s+p[0],0)/ring.length : 0;
+    const cy = ring ? ring.reduce((s,p)=>s+p[1],0)/ring.length : 0;
+    return quarterAt(cx, cy);
+  }
+
+  function positionTooltip(x, y) {
+    const pad=14, tw=tooltipEl.offsetWidth, th=tooltipEl.offsetHeight;
+    tooltipEl.style.left = (x+pad+tw>innerWidth  ? x-tw-pad : x+pad)+"px";
+    tooltipEl.style.top  = (y+pad+th>innerHeight ? y-th-pad : y+pad)+"px";
+  }
+
   // ── Search-result highlight ───────────────────────────────────────────────
   let highlightedFeature = null;
   let pinData = [];
@@ -512,41 +511,38 @@ async function init() {
     },
 
     onHover: ({ object, x, y }) => {
+      if (tooltipPinned) return;
       if (!object) { tooltipEl.style.display = "none"; return; }
-      const d = object.properties?.density ?? 0;
-
-      // Zone/municipio name
-      let zone;
-      if (object.properties?.name) {
-        zone = object.properties.name;
-      } else {
-        const geo = object.geometry;
-        let ring;
-        if (geo?.type === "Polygon") ring = geo.coordinates[0];
-        else if (geo?.type === "MultiPolygon") ring = geo.coordinates[0]?.[0];
-        const cx = ring ? ring.reduce((s,p)=>s+p[0],0)/ring.length : 0;
-        const cy = ring ? ring.reduce((s,p)=>s+p[1],0)/ring.length : 0;
-        zone = quarterAt(cx, cy);
-      }
-
+      const zone = zoneLabel(object);
       const pop  = object.properties?.population ?? 0;
       const dens = object.properties?.density    ?? 0;
+      tooltipEl.classList.remove("pinned");
       tooltipEl.innerHTML =
         `<span class="tarea">${zone}</span><br>` +
         `<span class="tval">${pop.toLocaleString()}</span><span class="tsub"> residents</span><br>` +
         `<span class="tsub">${dens.toLocaleString()} res/km²</span>`;
       tooltipEl.style.display = "block";
-      const pad=14, tw=tooltipEl.offsetWidth, th=tooltipEl.offsetHeight;
-      tooltipEl.style.left = (x+pad+tw>innerWidth  ? x-tw-pad : x+pad)+"px";
-      tooltipEl.style.top  = (y+pad+th>innerHeight ? y-th-pad : y+pad)+"px";
+      positionTooltip(x, y);
     },
 
-    onClick: ({ object, coordinate }) => {
+    onClick: async ({ object, coordinate, x, y }) => {
       if (!coordinate) return;
-      const stats = object?.properties
-        ? { density: object.properties.density ?? 0, population: object.properties.population ?? 0 }
-        : statsAt(...coordinate);
-      showCard(coordinate[0], coordinate[1], stats);
+      const pop  = object?.properties?.population ?? statsAt(...coordinate).population;
+      const dens = object?.properties?.density    ?? statsAt(...coordinate).density;
+      const zone = zoneLabel(object);
+      tooltipPinned = true;
+      tooltipEl.classList.add("pinned");
+      tooltipEl.innerHTML =
+        `<span class="tclose">✕</span>` +
+        `<span class="tarea">${zone}<span class="spin" id="tsp"></span></span><br>` +
+        `<span class="tval">${pop.toLocaleString()}</span><span class="tsub"> residents</span><br>` +
+        `<span class="tsub">${dens.toLocaleString()} res/km²</span>`;
+      tooltipEl.style.display = "block";
+      positionTooltip(x, y);
+      const { street, area } = await reverseGeocode(coordinate[0], coordinate[1]);
+      const label = [street, area].filter(Boolean).join(", ") || zone;
+      const areaEl = tooltipEl.querySelector(".tarea");
+      if (areaEl) areaEl.innerHTML = label;
     },
   });
 
@@ -605,6 +601,9 @@ async function init() {
     is3D = false;
     highlightedFeature = null;
     pinData = [];
+    tooltipPinned = false;
+    tooltipEl.classList.remove("pinned");
+    tooltipEl.style.display = "none";
     // Always return to sections view
     currentDataset  = "sections";
     ACTIVE_FEATURES = sectionsGeoJSON.features;
@@ -627,38 +626,26 @@ async function init() {
     document.getElementById("btn-3d").classList.remove("active");
   };
 
-  // ── Result card ───────────────────────────────────────────────────────────
-  async function showCard(lon, lat, stats, knownName) {
-    const { density, population } = stats;
-    cardEl.innerHTML =
-      `<span class="rclose" onclick="this.parentElement.style.display='none'">✕</span>` +
-      `<div class="raddr">${knownName || "…"}<span class="spin" id="rsp"></span></div>` +
-      `<span class="rdens">${population > 0 ? population.toLocaleString() : "—"}</span>` +
-      `<span class="rcomp"> residents</span>` +
-      (density > 0 ? `&ensp;<span class="rcomp">${density.toLocaleString()} res/km²</span>` : "") +
-      `<br>` + densityComparison(density);
-    cardEl.style.display = "block";
-
-    const { street, area } = await reverseGeocode(lon, lat);
-    const addrEl = cardEl.querySelector(".raddr");
-    if (addrEl) addrEl.innerHTML = [street, area].filter(Boolean).join(", ") || "Roma";
-  }
-
   // ── Search ────────────────────────────────────────────────────────────────
   async function search() {
-    const q = document.getElementById("search-input").value.trim();
+    const input = document.getElementById("search-input");
+    const q = input.value.trim();
     if (!q) return;
-    cardEl.innerHTML = `<span class="spin"></span> searching…`;
-    cardEl.style.display = "block";
 
     const geo = await forwardGeocode(q);
     if (!geo) {
-      cardEl.innerHTML = `<span style="color:#a08878">Address not found.</span>`;
+      input.style.borderColor = "rgba(188,48,80,.8)";
+      const prev = input.placeholder;
+      input.placeholder = "Address not found";
+      input.value = "";
+      setTimeout(() => { input.style.borderColor = ""; input.placeholder = prev; }, 2000);
       return;
     }
     highlightedFeature = featureAt(geo.lon, geo.lat);
     pinData = [geo];
     is3D = false;
+    tooltipPinned = false;
+    tooltipEl.style.display = "none";
     document.getElementById("btn-3d").classList.remove("active");
     document.getElementById("btn-flat").classList.add("active");
     deckgl.setProps({
@@ -668,8 +655,6 @@ async function init() {
         zoom: 14, pitch: 0, bearing: 0, transitionDuration: 800,
       },
     });
-    const stats = statsAt(geo.lon, geo.lat);
-    showCard(geo.lon, geo.lat, stats, geo.name);
   }
 
   document.getElementById("search-btn").onclick = search;
