@@ -283,7 +283,7 @@ function pointInPolygon(lon, lat, ring) {
   return inside;
 }
 
-function statsAt(lon, lat) {
+function featureAt(lon, lat) {
   for (const f of ACTIVE_FEATURES) {
     const geo = f.geometry;
     if (!geo) continue;
@@ -292,12 +292,18 @@ function statsAt(lon, lat) {
       : geo.type === "MultiPolygon"
         ? geo.coordinates.some(p => pointInPolygon(lon, lat, p[0]))
         : false;
-    if (hit) return {
-      density:    f.properties.density    ?? 0,
-      population: f.properties.population ?? 0,
-    };
+    if (hit) return f;
   }
-  return { density: 0, population: 0 };
+  return null;
+}
+
+function statsAt(lon, lat) {
+  const f = featureAt(lon, lat);
+  if (!f) return { density: 0, population: 0 };
+  return {
+    density:    f.properties.density    ?? 0,
+    population: f.properties.population ?? 0,
+  };
 }
 
 // ── Geocoding ─────────────────────────────────────────────────────────────────
@@ -413,28 +419,28 @@ async function init() {
     getLineWidth: 18, lineWidthMinPixels: 3,
   }) : null;
 
-  // ── Search-result pin ─────────────────────────────────────────────────────
-  let pinData = [];
+  // ── Search-result highlight ───────────────────────────────────────────────
+  let highlightedFeature = null;
   let currentMainLayer = makeSectionsLayer();
 
-  function makePinLayer(data) {
-    return new deck.ScatterplotLayer({
-      id: "pin", data,
-      getPosition: d => [d.lon, d.lat],
-      getRadius: 160,
-      getFillColor: [188, 48, 80, 240],
-      getLineColor: [255, 255, 255, 220],
+  function makeHighlightLayer(feature) {
+    if (!feature) return null;
+    return new deck.GeoJsonLayer({
+      id: "highlight",
+      data: { type: "FeatureCollection", features: [feature] },
+      filled: false, stroked: true, pickable: false,
+      getLineColor: [255, 210, 0, 255],
+      getLineWidth: 3,
       lineWidthMinPixels: 2,
-      stroked: true, pickable: false,
     });
   }
 
   function getLayers() {
-    return [
-      currentMainLayer,
-      ...(tiberLayer ? [tiberLayer] : []),
-      makePinLayer(pinData),
-    ];
+    const layers = [currentMainLayer];
+    if (tiberLayer) layers.push(tiberLayer);
+    const hl = makeHighlightLayer(highlightedFeature);
+    if (hl) layers.push(hl);
+    return layers;
   }
 
   // ── Deck ──────────────────────────────────────────────────────────────────
@@ -520,6 +526,7 @@ async function init() {
 
   resetView = function() {
     is3D = false;
+    highlightedFeature = null;
     currentMainLayer = currentDataset === "sections" ? makeSectionsLayer() : makeMunicipiLayer();
     deckgl.setProps({
       layers: getLayers(),
@@ -561,7 +568,7 @@ async function init() {
       cardEl.innerHTML = `<span style="color:#a08878">Address not found.</span>`;
       return;
     }
-    pinData = [geo];
+    highlightedFeature = featureAt(geo.lon, geo.lat);
     is3D = false;
     document.getElementById("btn-3d").classList.remove("active");
     document.getElementById("btn-flat").classList.add("active");
