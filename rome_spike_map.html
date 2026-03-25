@@ -137,6 +137,25 @@
   #loading .lspinner { width: 32px; height: 32px; border: 2px solid rgba(140,50,40,.12); border-top-color: #bc3050; border-radius: 50%; animation: spin .85s linear infinite; }
   #loading .lstatus  { margin-top: 14px; font-size: .68rem; letter-spacing: .17em; text-transform: uppercase; color: #b09080; }
   @keyframes spin { to { transform: rotate(360deg); } }
+
+  /* ── Mobile ──────────────────────────────────────────────── */
+  @media (max-width: 540px) {
+    #title          { top: 14px; left: 14px; }
+    #title h1       { font-size: 1.4rem; }
+    #title p        { font-size: .63rem; }
+
+    #layer-toggle   { top: 68px;  left: 14px; }
+    #view-toggle    { top: 102px; left: 14px; }
+    .toggle-btn     { padding: 4px 10px; font-size: .65rem; }
+
+    #search-wrap    { top: 140px; left: 14px; right: 14px; width: auto; }
+    #search-input   { flex: 1; width: auto; }
+
+    #result-card    { top: 190px; left: 14px; right: 14px; max-width: none; }
+
+    #legend         { bottom: 16px; left: 14px; }
+    #hint           { display: none; }
+  }
 </style>
 </head>
 <body>
