@@ -200,8 +200,8 @@ const PALETTE = [
 // where most sections live on the density distribution.
 const COLOUR_GAMMA = 0.4;
 function lerp(a, b, t) { return a.map((v,i) => Math.round(v + (b[i]-v)*t)); }
-function hexColor(t) {
-  const tg = Math.pow(Math.min(Math.max(t, 0), 1), COLOUR_GAMMA);
+function hexColor(t, gamma = COLOUR_GAMMA) {
+  const tg = Math.pow(Math.min(Math.max(t, 0), 1), gamma);
   const n = PALETTE.length - 1, s = tg * n;
   const lo = Math.floor(s), hi = Math.min(lo+1, n);
   return lerp(PALETTE[lo], PALETTE[hi], s - lo);
@@ -404,7 +404,7 @@ async function init() {
       filled: true, stroked: true, extruded: false,
       pickable: true, autoHighlight: true,
       highlightColor: [255, 255, 255, 55],
-      getFillColor: f => hexColor(Math.min((f.properties.population ?? 0) / maxMunicipiPop, 1)),
+      getFillColor: f => hexColor(Math.min((f.properties.population ?? 0) / maxMunicipiPop, 1), 1),
       getLineColor: [255, 255, 255, 130],
       getLineWidth: 2, lineWidthMinPixels: 1,
       opacity: 0.65,
@@ -421,6 +421,7 @@ async function init() {
 
   // ── Search-result highlight ───────────────────────────────────────────────
   let highlightedFeature = null;
+  let pinData = [];
   let currentMainLayer = makeSectionsLayer();
 
   function makeHighlightLayer(feature) {
@@ -428,10 +429,25 @@ async function init() {
     return new deck.GeoJsonLayer({
       id: "highlight",
       data: { type: "FeatureCollection", features: [feature] },
-      filled: false, stroked: true, pickable: false,
+      filled: true, stroked: true, pickable: false,
+      getFillColor: [30, 120, 200, 70],
       getLineColor: [30, 120, 200, 255],
-      getLineWidth: 18,
-      lineWidthMinPixels: 4,
+      lineWidthUnits: "pixels",
+      getLineWidth: 5,
+    });
+  }
+
+  function makePinLayer(data) {
+    if (!data.length) return null;
+    return new deck.ScatterplotLayer({
+      id: "pin", data,
+      getPosition: d => [d.lon, d.lat],
+      radiusUnits: "pixels",
+      getRadius: 8,
+      getFillColor: [30, 120, 200, 255],
+      getLineColor: [255, 255, 255, 255],
+      lineWidthMinPixels: 2,
+      stroked: true, pickable: false,
     });
   }
 
@@ -440,6 +456,8 @@ async function init() {
     if (tiberLayer) layers.push(tiberLayer);
     const hl = makeHighlightLayer(highlightedFeature);
     if (hl) layers.push(hl);
+    const pin = makePinLayer(pinData);
+    if (pin) layers.push(pin);
     return layers;
   }
 
@@ -527,6 +545,7 @@ async function init() {
   resetView = function() {
     is3D = false;
     highlightedFeature = null;
+    pinData = [];
     currentMainLayer = currentDataset === "sections" ? makeSectionsLayer() : makeMunicipiLayer();
     deckgl.setProps({
       layers: getLayers(),
@@ -569,6 +588,7 @@ async function init() {
       return;
     }
     highlightedFeature = featureAt(geo.lon, geo.lat);
+    pinData = [geo];
     is3D = false;
     document.getElementById("btn-3d").classList.remove("active");
     document.getElementById("btn-flat").classList.add("active");
