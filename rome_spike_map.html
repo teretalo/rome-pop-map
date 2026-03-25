@@ -345,11 +345,27 @@ async function init() {
 
   // Load all data in parallel
   statusEl.textContent = "Loading map data…";
-  const [sectionsGeoJSON, municipiGeoJSON, tiberGeoJSON] = await Promise.all([
+  const [sectionsGeoJSON, municipiGeoJSON, tiberGeoJSON, quartieriGeoJSON] = await Promise.all([
     fetch("rome_sections.geojson").then(r => r.json()),
     fetch("rome_municipi.geojson").then(r => r.json()).catch(() => null),
     fetch("rome_tiber.geojson").then(r => r.json()).catch(() => null),
+    fetch("rome_quartieri.geojson").then(r => r.json()).catch(() => null),
   ]);
+
+  const quartieriFeatures = quartieriGeoJSON?.features ?? [];
+  function quarterAt(lon, lat) {
+    for (const f of quartieriFeatures) {
+      const geo = f.geometry;
+      if (!geo) continue;
+      const hit = geo.type === "Polygon"
+        ? pointInPolygon(lon, lat, geo.coordinates[0])
+        : geo.type === "MultiPolygon"
+          ? geo.coordinates.some(p => pointInPolygon(lon, lat, p[0]))
+          : false;
+      if (hit) return f.properties.name ?? "Roma";
+    }
+    return "Roma";
+  }
 
   ACTIVE_FEATURES = sectionsGeoJSON.features;
 
@@ -485,7 +501,7 @@ async function init() {
         else if (geo?.type === "MultiPolygon") ring = geo.coordinates[0]?.[0];
         const cx = ring ? ring.reduce((s,p)=>s+p[0],0)/ring.length : 0;
         const cy = ring ? ring.reduce((s,p)=>s+p[1],0)/ring.length : 0;
-        zone = zoneAt(cx, cy);
+        zone = quarterAt(cx, cy);
       }
 
       const pop  = object.properties?.population ?? 0;
