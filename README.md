@@ -1,20 +1,21 @@
-# Roma Population Spike Map
+# Roma Population Density Map
 
-Interactive 3D population density spike map of Rome using Kontur 2023 data.
+Interactive map of Rome's population density using ISTAT 2021 census section boundaries.
+Toggle between a flat choropleth and 3D spikes, or switch to a municipio-level view.
 
 ## Quick start
 
 ### 1. Install Python dependencies
 ```bash
-pip install geopandas requests tqdm
+pip install geopandas requests tqdm pyproj
 ```
 
-### 2. Fetch & process data (~20 MB download)
+### 2. Fetch & process data (~80 MB download)
 ```bash
 python fetch_data.py
 ```
-This downloads the Kontur Italy H3 hexagon population dataset,
-clips it to Rome's bounding box, and writes `rome_population.json`.
+Downloads the Kontur Italy population dataset and ISTAT 2021 census section boundaries,
+clips to Rome, and writes the GeoJSON files used by the map.
 
 ### 3. Serve locally (required — browser blocks local file:// fetches)
 ```bash
@@ -22,15 +23,11 @@ python -m http.server 8080
 # then open http://localhost:8080/rome_spike_map.html
 ```
 
-## Data source
-- **Kontur Population** (2023-11-01) — H3 hex resolution 8, ~400 m cells
+## Data sources
+- **ISTAT Sezioni di Censimento 2021** — census section boundaries + population (POP21)
+  https://www.istat.it/notizia/basi-territoriali-e-variabili-censuarie/
+  License: CC BY 4.0
+- **Kontur Population** (2023-11-01) — H3 hex resolution 8, used for municipio aggregation
   https://www.kontur.io/portfolio/population-dataset/
-- License: CC BY 4.0
-
-## Notes on resolution
-- Kontur (~400 m) is the easiest starting point and matches Milos Popovic's workflow.
-- For higher resolution, consider **ISTAT Sezioni di Censimento** (Italian census
-  sections, ~100–200 households each). Requires joining the shapefile with the
-  population variable table from https://www.istat.it/notizia/dati-per-sezioni-di-censimento/
-- Meta/Facebook High-Resolution Population (~30 m) is available at HDX but
-  produces millions of points — needs downsampling before the web render.
+  License: CC BY 4.0
+- **OpenStreetMap / Overpass API** — municipio boundaries, Tiber river geometry
