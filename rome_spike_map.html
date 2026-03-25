@@ -333,10 +333,26 @@ async function init() {
   const statusEl  = document.getElementById("load-status");
   const tooltipEl = document.getElementById("tooltip");
   let tooltipPinned = false;
+  let pinnedCoord   = null;
+
+  function updatePinnedPosition(vs) {
+    if (!tooltipPinned || !pinnedCoord) return;
+    try {
+      const vp = new deck.WebMercatorViewport({ width: innerWidth, height: innerHeight, ...vs });
+      const [sx, sy] = vp.project(pinnedCoord);
+      if (sx < 0 || sx > innerWidth || sy < 0 || sy > innerHeight) {
+        tooltipEl.style.display = "none";
+      } else {
+        tooltipEl.style.display = "block";
+        positionTooltip(sx, sy);
+      }
+    } catch(e) {}
+  }
 
   tooltipEl.addEventListener("click", e => {
     if (e.target.classList.contains("tclose")) {
       tooltipPinned = false;
+      pinnedCoord   = null;
       tooltipEl.classList.remove("pinned");
       tooltipEl.style.display = "none";
     }
@@ -508,6 +524,7 @@ async function init() {
         if (Math.abs(delta) > 0.4) vs = { ...vs, zoom: oldViewState.zoom + Math.sign(delta) * 0.4 };
       }
       viewState = vs;
+      updatePinnedPosition(vs);
     },
 
     onHover: ({ object, x, y }) => {
@@ -531,6 +548,7 @@ async function init() {
       const dens = object?.properties?.density    ?? statsAt(...coordinate).density;
       const zone = zoneLabel(object);
       tooltipPinned = true;
+      pinnedCoord   = coordinate;
       tooltipEl.classList.add("pinned");
       tooltipEl.innerHTML =
         `<span class="tclose">✕</span>` +
@@ -602,6 +620,7 @@ async function init() {
     highlightedFeature = null;
     pinData = [];
     tooltipPinned = false;
+    pinnedCoord   = null;
     tooltipEl.classList.remove("pinned");
     tooltipEl.style.display = "none";
     // Always return to sections view
