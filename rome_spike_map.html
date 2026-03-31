@@ -380,8 +380,12 @@ async function init() {
   }
 
   // Max values for colour scaling
+  // Cap color/height scale at 99th percentile — grays out ~1% of outlier sections
+  const sectionDensities = sectionsGeoJSON.features.map(f => f.properties.density).sort((a,b) => a-b);
+  const DENSITY_CAP = sectionDensities[Math.floor(sectionDensities.length * 0.99)];
+
   const maxDensity = {
-    sections: Math.max(...sectionsGeoJSON.features.map(f => f.properties.density)),
+    sections: DENSITY_CAP,
     municipi:  municipiGeoJSON ? Math.max(...municipiGeoJSON.features.map(f => f.properties.density)) : 1,
   };
   const maxMunicipiPop = municipiGeoJSON
@@ -393,12 +397,16 @@ async function init() {
   let viewState = { longitude: 12.492, latitude: 41.894, zoom: 11.5, pitch: 0, bearing: 0 };
 
   const TARGET_HEIGHT_M = 18000;
+  const OUTLIER_COLOR = [180, 180, 180, 160]; // gray for sections above the cap
 
   function colorFor(f, dataset) {
-    return hexColor(Math.min((f.properties.density ?? 0) / maxDensity[dataset], 1));
+    const d = f.properties.density ?? 0;
+    if (dataset === "sections" && d > DENSITY_CAP) return OUTLIER_COLOR;
+    return hexColor(Math.min(d / maxDensity[dataset], 1));
   }
   function elevationFor(f, dataset) {
-    return ((f.properties.density ?? 0) / maxDensity[dataset]) * TARGET_HEIGHT_M;
+    const d = f.properties.density ?? 0;
+    return (Math.min(d, maxDensity[dataset]) / maxDensity[dataset]) * TARGET_HEIGHT_M;
   }
 
   // ── Layer factories ───────────────────────────────────────────────────────
