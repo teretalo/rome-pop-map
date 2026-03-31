@@ -609,33 +609,21 @@ async function init() {
   };
 
   resetView = function() {
-    is3D = false;
     highlightedFeature = null;
     pinData = [];
     tooltipPinned = false;
     pinnedCoord   = null;
     tooltipEl.classList.remove("pinned");
     tooltipEl.style.display = "none";
-    // Always return to sections view
-    currentDataset  = "sections";
-    ACTIVE_FEATURES = sectionsGeoJSON.features;
-    currentMainLayer = makeSectionsLayer();
-    document.getElementById("view-toggle").style.display = "";
-    document.querySelector("#legend .llbl").textContent = "Residents per km²";
-    const legendEnds = document.querySelectorAll("#legend .lends span");
-    legendEnds[0].textContent = "sparse";
-    legendEnds[1].textContent = "dense";
-    document.getElementById("btn-sections").classList.add("active");
-    document.getElementById("btn-municipi").classList.remove("active");
+    currentMainLayer = currentDataset === "sections" ? makeSectionsLayer() : makeMunicipiLayer();
     deckgl.setProps({
       layers: getLayers(),
       initialViewState: {
         longitude: 12.492, latitude: 41.894, zoom: 11.5,
-        pitch: 0, bearing: 0, transitionDuration: 700,
+        pitch: is3D ? 50 : 0, bearing: is3D ? -15 : 0,
+        transitionDuration: 700,
       },
     });
-    document.getElementById("btn-flat").classList.add("active");
-    document.getElementById("btn-3d").classList.remove("active");
   };
 
   // ── Search ────────────────────────────────────────────────────────────────
