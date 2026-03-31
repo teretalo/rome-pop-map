@@ -382,7 +382,7 @@ async function init() {
   // Max values for colour scaling
   // Gray out the hotel outlier (225,271 res/km²) — next highest is 124,298
   const OUTLIER_THRESHOLD = 150_000;
-  const OUTLIER_COLOR = [180, 180, 180, 160];
+  const OUTLIER_COLOR = [0, 0, 0, 0];
 
   const maxDensity = {
     sections: Math.max(...sectionsGeoJSON.features
