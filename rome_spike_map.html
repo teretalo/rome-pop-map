@@ -380,12 +380,14 @@ async function init() {
   }
 
   // Max values for colour scaling
-  // Cap color/height scale at 99th percentile — grays out ~1% of outlier sections
-  const sectionDensities = sectionsGeoJSON.features.map(f => f.properties.density).sort((a,b) => a-b);
-  const DENSITY_CAP = sectionDensities[Math.floor(sectionDensities.length * 0.99)];
+  // Gray out the hotel outlier (225,271 res/km²) — next highest is 124,298
+  const OUTLIER_THRESHOLD = 150_000;
+  const OUTLIER_COLOR = [180, 180, 180, 160];
 
   const maxDensity = {
-    sections: DENSITY_CAP,
+    sections: Math.max(...sectionsGeoJSON.features
+      .filter(f => (f.properties.density ?? 0) <= OUTLIER_THRESHOLD)
+      .map(f => f.properties.density)),
     municipi:  municipiGeoJSON ? Math.max(...municipiGeoJSON.features.map(f => f.properties.density)) : 1,
   };
   const maxMunicipiPop = municipiGeoJSON
@@ -397,11 +399,10 @@ async function init() {
   let viewState = { longitude: 12.492, latitude: 41.894, zoom: 11.5, pitch: 0, bearing: 0 };
 
   const TARGET_HEIGHT_M = 18000;
-  const OUTLIER_COLOR = [180, 180, 180, 160]; // gray for sections above the cap
 
   function colorFor(f, dataset) {
     const d = f.properties.density ?? 0;
-    if (dataset === "sections" && d > DENSITY_CAP) return OUTLIER_COLOR;
+    if (dataset === "sections" && d > OUTLIER_THRESHOLD) return OUTLIER_COLOR;
     return hexColor(Math.min(d / maxDensity[dataset], 1));
   }
   function elevationFor(f, dataset) {
