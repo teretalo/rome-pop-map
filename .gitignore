@@ -1,3 +1,5 @@
+.DS_Store
+
 # Heavy source data — reproducible by running fetch_data.py
 kontur_population_IT.gpkg
 kontur_population_IT.gpkg.gz
